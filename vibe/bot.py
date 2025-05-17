@@ -16,11 +16,12 @@ _l = logging.getLogger(__name__)
 class Bot:
     DEFAULT_USERNAME="vibe_bot"
 
-    def __init__(self, host="localhost", port=25565, username="vibe_bot", mc_version=None):
+    def __init__(self, host="localhost", port=25565, username="vibe_bot", mc_version=None, no_auth=False):
         self.mc_host = host
         self.mc_port = port
         self.mc_version = mc_version
         self.username = username
+        self._no_auth = no_auth
 
         self.player_whitelist = set(["Viticulture"])
 
@@ -53,7 +54,7 @@ class Bot:
             "username": self.username,
             "hideErrors": False,
         }
-        if self.username != self.DEFAULT_USERNAME:
+        if not self._no_auth and self.username != self.DEFAULT_USERNAME:
             arg_dict["auth"] = "microsoft"
         if self.mc_version:
             arg_dict["version"] = self.mc_version

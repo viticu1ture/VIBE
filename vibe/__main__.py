@@ -33,10 +33,16 @@ def main():
         type=str,
         default="1.21.1",
     )
+    parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        help="Disable authentication",
+        default=False,
+    )
 
     args = parser.parse_args()
     # Create a bot instance
-    bot = Bot(host=args.host, port=args.port, username=args.username, mc_version=args.mc_version)
+    bot = Bot(host=args.host, port=args.port, username=args.username, mc_version=args.mc_version, no_auth=args.no_auth)
     bot.connect()
     time.sleep(1)
     import IPython; IPython.embed()

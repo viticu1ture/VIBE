@@ -1,4 +1,5 @@
 import argparse
+import time
 from time import sleep
 
 import vibe
@@ -27,12 +28,18 @@ def main():
         type=str,
         default="vibe_bot",
     )
+    parser.add_argument(
+        "--mc-version",
+        type=str,
+        default="1.21.1",
+    )
 
     args = parser.parse_args()
     # Create a bot instance
-    bot = Bot(host=args.host, port=args.port, username=args.username)
+    bot = Bot(host=args.host, port=args.port, username=args.username, mc_version=args.mc_version)
     bot.connect()
-    sleep(10000)
+    time.sleep(1)
+    import IPython; IPython.embed()
 
 
 if __name__ == "__main__":

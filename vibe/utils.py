@@ -11,6 +11,12 @@ Vec3  = require('vec3').Vec3
 # Math helper functions
 #
 
+def coor_to_vec3(coordinate):
+    return Vec3(coordinate[0], coordinate[1], coordinate[2])
+
+def vec3_to_coor(vec3):
+    return (vec3.x, vec3.y, vec3.z)
+
 def add_vec3(v1, v2):
     return Vec3(v1.x+v2.x,v1.y+v2.y,v1.z+v2.z)
 
@@ -19,7 +25,6 @@ def sub_vec3(v1, v2):
 
 def inv_vec3(v1):
     return Vec3(-v1.x,-v1.y,-v1.z)
-
 
 def len_vec3(v):
     return sqrt(v.x*v.x+v.y*v.y+v.z*v.z)

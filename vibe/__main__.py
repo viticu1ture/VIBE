@@ -5,6 +5,10 @@ from time import sleep
 import vibe
 from vibe.bot import Bot
 
+# set the logging to debug for all vibe modules
+import logging
+logging.getLogger("vibe").setLevel(logging.INFO)
+
 def main():
     parser = argparse.ArgumentParser(description="VIBE CLI")
     parser.add_argument(

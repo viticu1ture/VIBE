@@ -1,4 +1,8 @@
-from abc import ABC, abstractmethod
+from vibe.bot import Bot
 
-class Action(ABC):
-    pass
+
+class Action:
+    def __init__(self, name: str, description: str, bot: Bot, *args, **kwargs):
+        self.name = name
+        self.description = description
+        self.bot = bot

@@ -4,6 +4,8 @@ import time
 
 from pygments.lexers import q
 
+from ..actions.always_shield import AlwaysShield
+from ..actions.efficient_eat import EfficientEat
 from ..bot import Bot
 from .strategy import Strategy
 from ..constants import FAST_WAIT_SPEED, PLAYER_ENTITY, ITEM_ENTITY
@@ -15,6 +17,12 @@ class NetherHighwayStrategy(Strategy):
         super().__init__(bot)
         # the coordinate is always assumed to be at y=120
         self.target_coordinate = coordinate
+
+        self.seen_loot = set()
+
+        # actions
+        self.efficient_eat = None
+
         assert self.target_coordinate[1] == 120, "NetherHighwayStrategy only works at y=120"
 
     def start(self):
@@ -36,6 +44,14 @@ class NetherHighwayStrategy(Strategy):
         """
         # begin by starting the pathfinding
         self.bot.goto(*self.target_coordinate)
+
+        # efficient eat
+        self.efficient_eat = EfficientEat(self.bot)
+        self.efficient_eat.run()
+
+        # always shield
+        self.always_shield = AlwaysShield(self.bot)
+        self.always_shield.run()
 
     def entity_check_loop(self):
         _l.info("Entering loop.")
@@ -63,7 +79,10 @@ class NetherHighwayStrategy(Strategy):
                     is_shulker = "shulker" in entity_sub_name
                     is_eleytra = "eleytra" in entity_sub_name
                     is_valuable = is_netherite or is_shulker or is_eleytra
-
                     # TODO: go to the item and pick it up if it is within a radium and if
                     #     you can make it to the item in time of despawning (5 minutes)
-                    _l.info("Found loot item '%s' at %s", entity_sub_name, entity_coord)
+                    if is_valuable:
+                        item_tup = (int(entity_coord[0]), int(entity_coord[1]), int(entity_coord[2]), entity_sub_name)
+                        if item_tup not in self.seen_loot:
+                            self.seen_loot.add(item_tup)
+                            _l.info("Found loot item '%s' at %s", entity_sub_name, entity_coord)

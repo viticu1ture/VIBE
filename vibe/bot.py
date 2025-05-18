@@ -3,7 +3,7 @@ import threading
 import time
 from collections import defaultdict
 
-from javascript import require, Once
+from javascript import require, On
 
 from vibe.constants import PLAYER_ENTITY, STORAGE_BLOCKS, NETHER_BRICKS, BLACKSTONE_BLOCKS, DIM_NETHER, DIM_OVERWORLD, \
     SPAWNER_BLOCK, CHEST_BLOCK
@@ -13,8 +13,12 @@ vec3 = require('vec3').Vec3
 
 _l = logging.getLogger(__name__)
 
+DEBUG = True
+
 class Bot:
     DEFAULT_USERNAME="vibe_bot"
+    MAX_HUNGER=20
+    MAX_HEALTH=20
 
     def __init__(self, host="localhost", port=25565, username="vibe_bot", mc_version=None, no_auth=False):
         self.mc_host = host
@@ -23,7 +27,7 @@ class Bot:
         self.username = username
         self._no_auth = no_auth
 
-        self.player_whitelist = set(["Viticulture"])
+        self.player_whitelist = set(["Viticulture", "JuicySword"])
 
         # javascript objects inited later
         self.mineflayer = require("mineflayer")
@@ -33,6 +37,13 @@ class Bot:
 
         self.bot: "mineflayer.Bot" = None
         self._viewer_started = False
+
+        # format: {event_name: [handler1, handler2, ...]}
+        self.event_handlers = defaultdict(list)
+        self.register_event_handler("login", self.handle_login)
+        self.register_event_handler("spawn", self.handle_spawn)
+        self.register_event_handler("kicked", self.handle_kicked)
+
 
     #
     # Interaction
@@ -52,7 +63,7 @@ class Bot:
             "host": self.mc_host,
             "port": self.mc_port,
             "username": self.username,
-            "hideErrors": False,
+            "hideErrors": True,
         }
         if not self._no_auth and self.username != self.DEFAULT_USERNAME:
             arg_dict["auth"] = "microsoft"
@@ -64,30 +75,46 @@ class Bot:
         # load plugins
         self.bot.loadPlugin(self.pathfinder.pathfinder)
 
+        #
         # create stubs for the bot events
-        @Once(self.bot, "login")
+        #
+
+        @On(self.bot, "login")
         def _on_login(*args):
-            self.handle_login(*args)
+            self.handle_event("login", *args)
 
-        @Once(self.bot, "spawn")
+        @On(self.bot, "chat")
+        def _on_chat(username, message, *args):
+            _l.info("Chat received: %s", message)
+            self.handle_event("chat", username, message, *args)
+
+        @On(self.bot, "spawn")
         def _on_spawn(*args):
-            self.handle_spawn(*args)
+            self.handle_event("spawn", *args)
 
-        @Once(self.bot, "kicked")
+        @On(self.bot, "kicked")
         def _on_kicked(*args):
-            self.handle_kicked(*args)
+            self.handle_event("kicked", *args)
 
-        @Once(self.bot, "error")
+        @On(self.bot, "error")
         def _on_error(*args):
-            _l.info(f"Bot %s has encountered an error", self.username)
+            self.handle_event("error", *args)
 
-        @Once(self.bot, "death")
+        @On(self.bot, "death")
         def _on_death(*args):
-            _l.info(f"Bot %s has died", self.username)
+            self.handle_event("death", *args)
 
-        @Once(self.bot, "end")
+        @On(self.bot, "end")
         def _on_end(*args):
-            _l.info(f"Bot %s has ended the connection: %s", self.username, 'gone')
+            self.handle_event("end", *args)
+
+        @On(self.bot, "health")
+        def _on_health(*args):
+            self.handle_event("health", *args)
+
+        @On(self.bot, "physicsTick")
+        def _on_tick(*args):
+            self.handle_event("tick", *args)
 
     def disconnect(self):
         """
@@ -112,8 +139,6 @@ class Bot:
         self.connect()
 
 
-
-
     def do_nether_strategy(self, coordinate):
         """
         This function is a placeholder for the Nether strategy.
@@ -126,6 +151,39 @@ class Bot:
     #
     # Event Handlers
     #
+
+    def register_event_handler(self, event_name, handler):
+        """
+        Register an event handler for a specific event.
+        :param event_name: The name of the event to register the handler for.
+        :param handler: The handler function to register.
+        """
+        if not callable(handler):
+            raise ValueError("Handler must be callable")
+        self.event_handlers[event_name].append(handler)
+
+    def unregister_event_handler(self, event_name, handler):
+        """
+        Unregister an event handler for a specific event.
+        :param event_name: The name of the event to unregister the handler for.
+        :param handler: The handler function to unregister.
+        """
+        if not callable(handler):
+            raise ValueError("Handler must be callable")
+        if event_name in self.event_handlers:
+            self.event_handlers[event_name].remove(handler)
+
+    def handle_event(self, event_name, *args, **kwargs):
+        handlers = self.event_handlers.get(event_name, [])
+        for handler in handlers:
+            if DEBUG:
+                handler(*args, **kwargs)
+            else:
+                try:
+                    handler(*args, **kwargs)
+                except Exception as e:
+                    _l.error(f"Error in event handler for event %s: %s", event_name, e)
+                    continue
 
     def handle_login(self, *args):
         _l.info(f"Bot %s has logged in to the server %s:%s", self.username, self.mc_host, self.mc_port)
@@ -158,10 +216,97 @@ class Bot:
     def dimension(self):
         return self.bot.game.dimension
 
+    @property
+    def hunger(self):
+        """
+        Get the current hunger level of the bot.
+        """
+        return self.bot.food
+
+    @property
+    def inventory(self):
+        """
+        Get the current inventory of the bot.
+        """
+        inventory_items = self.bot.inventory.slots
+        inventory = [i for i in inventory_items]
+        inventory = inventory[::-1]
+        # XXX: note I used to use idx here
+        inv_dict = {item.slot: item for idx, item in enumerate(inventory) if item is not None}
+        return inv_dict
 
     #
     # Common Actions
     #
+
+    def item_in_hand(self, offhand=False) -> object | None:
+        """
+        Get the item in the hand or offhand.
+        :param offhand: If True, get the item in the offhand, otherwise get the item in the hand.
+        :return: The item in the hand or offhand.
+        """
+        if self.bot is None:
+            _l.info(f"Not connected to server, cannot get item in hand")
+            return None
+
+        hand_slot = self.bot.getEquipmentDestSlot("off-hand" if offhand else "hand")
+        if hand_slot is None:
+            _l.critical("Could not get hand slot")
+            return None
+
+        item = self.inventory.get(hand_slot, None)
+        return item
+
+    def equip_shield(self) -> bool:
+        """
+        Equip the shield in the offhand. Returns True if successful, False otherwise.
+        """
+        item_in_hand = self.item_in_hand(offhand=True)
+        if item_in_hand and item_in_hand.name == "shield":
+            _l.debug("Shield already equipped in hand")
+            return True
+
+        inventory = self.inventory
+        for slot, item in inventory.items():
+            if item and item.name == "shield":
+                self.bot.equip(item, "off-hand")
+                _l.info(f"Equipped shield in slot %d", slot)
+                return True
+
+        return False
+
+    def is_food_item(self, item) -> bool | object:
+        """
+        Check if the item is a food item.
+        """
+        if item is None:
+            return False
+        e_type = item.type
+        if e_type is None:
+            return False
+
+        food_data = self.mc_data.foods[e_type]
+        if food_data is None:
+            return False
+
+        return food_data
+
+    def equip_inventory_item(self, slot, offhand=False) -> bool:
+        inventory = self.inventory
+        if not slot in inventory:
+            _l.warning(f"Slot %d not found in inventory", slot)
+            return False
+
+        item = inventory[slot]
+        if not item:
+            _l.warning(f"Item %d not found in inventory", slot)
+            return False
+
+        # equip the item
+        place = "off-hand" if offhand else "hand"
+        self.bot.equip(item, place)
+        return True
+
 
     def goto(self, x, y, z):
         """

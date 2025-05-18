@@ -7,7 +7,9 @@ _l = logging.getLogger(__name__)
 class EfficientEat(Action):
     """
     Eats only enough food to keep the hunger bar full and only eats when that can be done.
+    Note: you do not get the slowdown effect of eating when using this action, making it a hack.
     """
+    IS_HACK = True
 
     def __init__(self, bot, *args, **kwargs):
         super().__init__("Efficient Eat", self.__class__.__doc__.strip(), bot, *args, **kwargs)
@@ -15,6 +17,11 @@ class EfficientEat(Action):
     def run(self, *args, **kwargs):
         # register on hunger change events
         self.bot.register_event_handler("health", self.run_once)
+
+    def stop(self):
+        # unregister on hunger change events
+        self.bot.unregister_event_handler("health", self.run_once)
+        _l.debug("EfficientEat stopped.")
 
     def run_once(self, *args, **kwargs):
         hunger = self.bot.hunger
@@ -34,7 +41,10 @@ class EfficientEat(Action):
         if food_points <= needed_food:
             _l.info("Eating food with %s points...", food_points)
             self.bot.equip_inventory_item(inv_slot)
-            self.bot.bot.consume()
+            with self.bot.activate_item_lock:
+                self.bot.mf_bot.deactivateItem()
+                self.bot.mf_bot.consume()
+            _l.info("Food consumed!")
         else:
             _l.debug("Not enough food points, only %s points", food_points)
 

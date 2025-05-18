@@ -18,17 +18,17 @@ class NetherHighwayStrategy(Strategy):
         # the coordinate is always assumed to be at y=120
         self.target_coordinate = coordinate
 
-        self.seen_loot = set()
+        self._actions = []
 
-        # actions
-        self.efficient_eat = None
+        # artifacts
+        self.seen_loot = set()
 
         assert self.target_coordinate[1] == 120, "NetherHighwayStrategy only works at y=120"
 
     def start(self):
         super().start()
         # start the bot
-        self._start_events()
+        self._start_async_events()
 
         # then start the entity check loop
         _l.info("Starting entity check loop...")
@@ -36,7 +36,7 @@ class NetherHighwayStrategy(Strategy):
         t.start()
         _l.info("Entity check loop started.")
 
-    def _start_events(self):
+    def _start_async_events(self):
         """
         All events that should be run on start (or restart) of the bot.
         This should exclude threads that are already running.
@@ -45,13 +45,26 @@ class NetherHighwayStrategy(Strategy):
         # begin by starting the pathfinding
         self.bot.goto(*self.target_coordinate)
 
-        # efficient eat
-        self.efficient_eat = EfficientEat(self.bot)
-        self.efficient_eat.run()
+        # then start the actions
+        self._actions = [
+            EfficientEat(self.bot),
+            AlwaysShield(self.bot),
+        ]
+        for action in self._actions:
+            action.run()
 
-        # always shield
-        self.always_shield = AlwaysShield(self.bot)
-        self.always_shield.run()
+    def _stop_async_events(self):
+        """
+        All events that should be stopped on stop (or restart) of the bot.
+        This should exclude threads that are already stopped.
+        :return:
+        """
+        # stop the pathfinding
+        self.bot.mf_bot.pathfinding.stop()
+
+        # stop the actions
+        for action in self._actions:
+            action.stop()
 
     def entity_check_loop(self):
         _l.info("Entering loop.")
@@ -73,7 +86,7 @@ class NetherHighwayStrategy(Strategy):
                     _l.info("Bad entity '%s' detected at %s", entity_sub_name, entity_coord)
                     self.bot.reconnect(wait_time=10)
                     # TODO: add a on_reconnect event
-                    self._start_events()
+                    self._start_async_events()
                 if entity_type == ITEM_ENTITY:
                     is_netherite = "netherite" in entity_sub_name
                     is_shulker = "shulker" in entity_sub_name
@@ -85,4 +98,5 @@ class NetherHighwayStrategy(Strategy):
                         item_tup = (int(entity_coord[0]), int(entity_coord[1]), int(entity_coord[2]), entity_sub_name)
                         if item_tup not in self.seen_loot:
                             self.seen_loot.add(item_tup)
-                            _l.info("Found loot item '%s' at %s", entity_sub_name, entity_coord)
+                            _l.info("Found loot item '%s' at %s", entity_sub_name, item_tup[0:3])
+

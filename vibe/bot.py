@@ -35,7 +35,8 @@ class Bot:
         self.pathfinder =  None
         self.mc_data = None
 
-        self.bot: "mineflayer.Bot" = None
+        self.mf_bot: "mineflayer.Bot" = None
+        self.activate_item_lock = threading.Lock()
         self._viewer_started = False
 
         # format: {event_name: [handler1, handler2, ...]}
@@ -43,7 +44,6 @@ class Bot:
         self.register_event_handler("login", self.handle_login)
         self.register_event_handler("spawn", self.handle_spawn)
         self.register_event_handler("kicked", self.handle_kicked)
-
 
     #
     # Interaction
@@ -70,49 +70,49 @@ class Bot:
         if self.mc_version:
             arg_dict["version"] = self.mc_version
 
-        self.bot = self.mineflayer.createBot(arg_dict)
+        self.mf_bot = self.mineflayer.createBot(arg_dict)
 
         # load plugins
-        self.bot.loadPlugin(self.pathfinder.pathfinder)
+        self.mf_bot.loadPlugin(self.pathfinder.pathfinder)
 
         #
         # create stubs for the bot events
         #
 
-        @On(self.bot, "login")
+        @On(self.mf_bot, "login")
         def _on_login(*args):
             self.handle_event("login", *args)
 
-        @On(self.bot, "chat")
+        @On(self.mf_bot, "chat")
         def _on_chat(username, message, *args):
             _l.info("Chat received: %s", message)
             self.handle_event("chat", username, message, *args)
 
-        @On(self.bot, "spawn")
+        @On(self.mf_bot, "spawn")
         def _on_spawn(*args):
             self.handle_event("spawn", *args)
 
-        @On(self.bot, "kicked")
+        @On(self.mf_bot, "kicked")
         def _on_kicked(*args):
             self.handle_event("kicked", *args)
 
-        @On(self.bot, "error")
+        @On(self.mf_bot, "error")
         def _on_error(*args):
             self.handle_event("error", *args)
 
-        @On(self.bot, "death")
+        @On(self.mf_bot, "death")
         def _on_death(*args):
             self.handle_event("death", *args)
 
-        @On(self.bot, "end")
+        @On(self.mf_bot, "end")
         def _on_end(*args):
             self.handle_event("end", *args)
 
-        @On(self.bot, "health")
+        @On(self.mf_bot, "health")
         def _on_health(*args):
             self.handle_event("health", *args)
 
-        @On(self.bot, "physicsTick")
+        @On(self.mf_bot, "physicsTick")
         def _on_tick(*args):
             self.handle_event("tick", *args)
 
@@ -121,13 +121,13 @@ class Bot:
         Disconnect the bot from the server.
         """
         _l.info("Disconnecting from server...")
-        if self.bot:
+        if self.mf_bot:
             if self._viewer_started:
-                self.bot.viewer.close()
+                self.mf_bot.viewer.close()
                 self._viewer_started = False
 
-            self.bot.end()
-            self.bot = None
+            self.mf_bot.end()
+            self.mf_bot = None
 
     def reconnect(self, wait_time=10):
         """
@@ -190,7 +190,7 @@ class Bot:
         # create the viewer
         self.mineflayer_viewer = require("prismarine-viewer").mineflayer
         self.mineflayer_viewer(
-            self.bot, {"port": 3007, "firstPerson": True}
+            self.mf_bot, {"port": 3007, "firstPerson": True}
         )
         self._viewer_started = True
 
@@ -209,26 +209,26 @@ class Bot:
         """
         Get the current coordinates of the bot.
         """
-        position = self.bot.entity.position
+        position = self.mf_bot.entity.position
         return (position["x"], position["y"], position["z"]) if position else None
 
     @property
     def dimension(self):
-        return self.bot.game.dimension
+        return self.mf_bot.game.dimension
 
     @property
     def hunger(self):
         """
         Get the current hunger level of the bot.
         """
-        return self.bot.food
+        return self.mf_bot.food
 
     @property
     def inventory(self):
         """
         Get the current inventory of the bot.
         """
-        inventory_items = self.bot.inventory.slots
+        inventory_items = self.mf_bot.inventory.slots
         inventory = [i for i in inventory_items]
         inventory = inventory[::-1]
         # XXX: note I used to use idx here
@@ -245,11 +245,11 @@ class Bot:
         :param offhand: If True, get the item in the offhand, otherwise get the item in the hand.
         :return: The item in the hand or offhand.
         """
-        if self.bot is None:
+        if self.mf_bot is None:
             _l.info(f"Not connected to server, cannot get item in hand")
             return None
 
-        hand_slot = self.bot.getEquipmentDestSlot("off-hand" if offhand else "hand")
+        hand_slot = self.mf_bot.getEquipmentDestSlot("off-hand" if offhand else "hand")
         if hand_slot is None:
             _l.critical("Could not get hand slot")
             return None
@@ -269,7 +269,7 @@ class Bot:
         inventory = self.inventory
         for slot, item in inventory.items():
             if item and item.name == "shield":
-                self.bot.equip(item, "off-hand")
+                self.mf_bot.equip(item, "off-hand")
                 _l.info(f"Equipped shield in slot %d", slot)
                 return True
 
@@ -304,7 +304,7 @@ class Bot:
 
         # equip the item
         place = "off-hand" if offhand else "hand"
-        self.bot.equip(item, place)
+        self.mf_bot.equip(item, place)
         return True
 
 
@@ -313,15 +313,15 @@ class Bot:
         Pathfind the bot to a specific location in the world.
         """
         # set the default movement
-        default_movement = self.pathfinder.Movements(self.bot)
-        default_movement.allowParkour = False
+        default_movement = self.pathfinder.Movements(self.mf_bot)
+        default_movement.allowParkour = True #False
 
-        self.bot.pathfinder.setMovements(default_movement)
+        self.mf_bot.pathfinder.setMovements(default_movement)
 
         # set the goal
         # create a Vec3 object for the target position
         target_pos = vec3(x, y, z)
-        self.bot.pathfinder.setGoal(
+        self.mf_bot.pathfinder.setGoal(
             self.pathfinder.goals.GoalNear(target_pos.x, target_pos.y, target_pos.z)
         )
 
@@ -351,9 +351,9 @@ class Bot:
         - The entity name/type
         """
         entities = []
-        entity_nums = list(self.bot.entities)
+        entity_nums = list(self.mf_bot.entities)
         for entity_num in entity_nums:
-            entity = self.bot.entities[entity_num]
+            entity = self.mf_bot.entities[entity_num]
             if entity is None:
                 continue
 
@@ -400,7 +400,7 @@ class Bot:
             }
             if point:
                 find_args['point'] = coor_to_vec3(point)
-            block_poses = self.bot.findBlocks(find_args)
+            block_poses = self.mf_bot.findBlocks(find_args)
             for block_pos in block_poses:
                 coord = (block_pos['x'], block_pos['y'], block_pos['z'])
                 found_blocks[search_block].append(coord)
@@ -429,7 +429,7 @@ class Bot:
             # check if the chest is on top of a nether brick block
             if self.dimension == DIM_NETHER:
                 below_chest = coor_to_vec3((chest_coord[0], chest_coord[1] - 1, chest_coord[2]))
-                block_below = self.bot.blockAt(below_chest)
+                block_below = self.mf_bot.blockAt(below_chest)
 
                 # check if the block below is a nether brick
                 if block_below:

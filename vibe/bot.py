@@ -27,7 +27,7 @@ class Bot:
         self.username = username
         self._no_auth = no_auth
 
-        self.player_whitelist = set(["Viticulture", "JuicySword"])
+        self.player_whitelist = {} #set(["Viticulture", "JuicySword"])
 
         # javascript objects inited later
         self.mineflayer = require("mineflayer")
@@ -44,6 +44,8 @@ class Bot:
         self.register_event_handler("login", self.handle_login)
         self.register_event_handler("spawn", self.handle_spawn)
         self.register_event_handler("kicked", self.handle_kicked)
+
+        self.do_handlers = True
 
     #
     # Interaction
@@ -63,7 +65,7 @@ class Bot:
             "host": self.mc_host,
             "port": self.mc_port,
             "username": self.username,
-            "hideErrors": True,
+            "hideErrors": False,
         }
         if not self._no_auth and self.username != self.DEFAULT_USERNAME:
             arg_dict["auth"] = "microsoft"
@@ -116,11 +118,14 @@ class Bot:
         def _on_tick(*args):
             self.handle_event("tick", *args)
 
+        self.do_handlers = True
+
     def disconnect(self):
         """
         Disconnect the bot from the server.
         """
         _l.info("Disconnecting from server...")
+        self.do_handlers = False
         if self.mf_bot:
             if self._viewer_started:
                 self.mf_bot.viewer.close()
@@ -176,6 +181,10 @@ class Bot:
     def handle_event(self, event_name, *args, **kwargs):
         handlers = self.event_handlers.get(event_name, [])
         for handler in handlers:
+            if not self.do_handlers:
+                _l.debug("Skipping event %s, handlers disabled", event_name)
+                return
+
             if DEBUG:
                 handler(*args, **kwargs)
             else:
@@ -234,6 +243,13 @@ class Bot:
         # XXX: note I used to use idx here
         inv_dict = {item.slot: item for idx, item in enumerate(inventory) if item is not None}
         return inv_dict
+
+    @property
+    def health(self):
+        """
+        Get the current health of the bot.
+        """
+        return self.mf_bot.health
 
     #
     # Common Actions
@@ -314,7 +330,7 @@ class Bot:
         """
         # set the default movement
         default_movement = self.pathfinder.Movements(self.mf_bot)
-        default_movement.allowParkour = True #False
+        default_movement.allowParkour = False #True
 
         self.mf_bot.pathfinder.setMovements(default_movement)
 

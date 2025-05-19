@@ -14,7 +14,7 @@ class AlwaysShield(Action):
     IS_HACK = True
 
     def __init__(self, bot, *args, **kwargs):
-        super().__init__("Shield Goto", self.__class__.__doc__.strip(), bot, *args, **kwargs)
+        super().__init__("Always Shield", self.__class__.__doc__.strip(), bot, *args, **kwargs)
         self.run_amt = 0
 
     def run(self, *args, **kwargs):
@@ -27,10 +27,6 @@ class AlwaysShield(Action):
         _l.debug("AlwaysShield stopped.")
 
     def run_once(self, *args, **kwargs):
-        self.run_amt = 1
-        if self.run_amt != 1:
-            return
-
         # equip the shield if we have one available
         shield_in_offhand = self.bot.equip_shield()
 
@@ -43,15 +39,16 @@ class AlwaysShield(Action):
             _l.debug("No shield found in offhand, not activating.")
             return False
 
+        # TODO: make it always look at the nearest entity (glitches when running)
         # get the nearest entity and point to it
-        entity = self.bot.mf_bot.nearestEntity()
-        if entity is None:
-            _l.debug("No entity found, not pointing.")
-            return False
+        #entity = self.bot.mf_bot.nearestEntity()
+        #if entity is None:
+        #    _l.debug("No entity found, not pointing.")
+        #    return False
 
-        ent_pos = entity.position
-        if ent_pos is None:
-            _l.debug("Entity has no position, not pointing.")
-            return False
+        #ent_pos = entity.position
+        #if ent_pos is None:
+        #    _l.debug("Entity has no position, not pointing.")
+        #    return False
 
         return True

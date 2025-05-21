@@ -14,30 +14,20 @@ class AlwaysShield(Action):
     IS_HACK = True
 
     def __init__(self, bot, *args, **kwargs):
-        super().__init__("Always Shield", self.__class__.__doc__.strip(), bot, *args, **kwargs)
-        self.run_amt = 0
-
-    def run(self, *args, **kwargs):
-        # register on entity change events
-        self.bot.register_event_handler("tick", self.run_once)
-
-    def stop(self):
-        # unregister on entity change events
-        self.bot.unregister_event_handler("tick", self.run_once)
-        _l.debug("AlwaysShield stopped.")
+        super().__init__("Always Shield", self.__class__.__doc__.strip(), bot, *args, run_event="tick", **kwargs)
 
     def run_once(self, *args, **kwargs):
-        # equip the shield if we have one available
-        shield_in_offhand = self.bot.equip_shield()
+        with self.bot.activate_item_lock:
+            # equip the shield if we have one available
+            shield_in_offhand = self.bot.equip_shield()
 
-        if shield_in_offhand:
-            shield_activated = self.bot.mf_bot.usingHeldItem
-            if not shield_activated:
-                with self.bot.activate_item_lock:
+            if shield_in_offhand:
+                shield_activated = self.bot.mf_bot.usingHeldItem
+                if not shield_activated:
                     self.bot.mf_bot.activateItem(True)
-        else:
-            _l.debug("No shield found in offhand, not activating.")
-            return False
+            else:
+                _l.debug("No shield found in offhand, not activating.")
+                return False
 
         # TODO: make it always look at the nearest entity (glitches when running)
         # get the nearest entity and point to it

@@ -5,6 +5,7 @@ from ..actions.always_shield import AlwaysShield
 from ..actions.efficient_eat import EfficientEat
 from ..actions.emergency_quit import EmergencyQuit
 from ..actions.loot_finder import LootFinder
+from ..actions.goto_location import GotoLocation
 from ..bot import Bot
 from .strategy import Strategy
 
@@ -43,31 +44,18 @@ class NetherHighwayStrategy(Strategy):
         This should exclude threads that are already running.
         :return:
         """
-        # begin by starting the pathfinding
-        self.bot.goto(*self.target_coordinate)
-
         # then start the actions
         self._actions = [
+            GotoLocation(self.bot, self.target_coordinate, log_interval=2500),
+            EmergencyQuit(self.bot, player_reconnect_timer=60, reconnect_handler=self.restart_handler),
             EfficientEat(self.bot),
-            AlwaysShield(self.bot),
-            EmergencyQuit(self.bot, player_reconnect_timer=15, reconnect_handler=self.restart_handler, check_food=False),
             LootFinder(self.bot),
+            #AlwaysShield(self.bot),
         ]
         for action in self._actions:
-            action.run()
+            action.start()
 
     def _stop_async_events(self):
-        """
-        All events that should be stopped on stop (or restart) of the bot.
-        This should exclude threads that are already stopped.
-        :return:
-        """
-        # stop the pathfinding
-        if self.bot.mf_bot and self.bot.mf_bot.pathfinding:
-            _l.debug("Stopping pathfinding...")
-            self.bot.mf_bot.pathfinding.stop()
-
-        # stop the actions
         for action in self._actions:
             action.stop()
 

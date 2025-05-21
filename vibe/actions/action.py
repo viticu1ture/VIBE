@@ -8,25 +8,22 @@ class Action:
     """
     IS_HACK = False
 
-    def __init__(self, name: str, description: str, bot: Bot, *args, **kwargs):
+    def __init__(self, name: str, description: str, bot: Bot, *args, run_event: str = None, **kwargs):
         self.name = name
         self.description = description
         self.bot = bot
+        self.run_event = run_event
 
-    def run(self, *args, **kwargs):
-        """
-        Run the action. This method should be overridden by subclasses.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
+    def start(self, *args, **kwargs):
+        if self.run_event is not None:
+            self.bot.register_event_handler(self.run_event, self.run_once)
+
+    def stop(self):
+        if self.run_event is not None:
+            self.bot.unregister_event_handler(self.run_event, self.run_once)
 
     def run_once(self, *args, **kwargs):
         """
         Run the action once. This method should be overridden by subclasses.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
-
-    def stop(self):
-        """
-        Stop the action. This method should be overridden by subclasses.
         """
         raise NotImplementedError("Subclasses must implement this method.")

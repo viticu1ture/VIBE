@@ -18,19 +18,10 @@ class LootFinder(Action):
     """
 
     def __init__(self, bot: Bot):
-        super().__init__("Loot Finder", "Monitors for valuable items in the environment", bot)
+        super().__init__("Loot Finder", "Monitors for valuable items in the environment", bot, run_event="tick")
         self.seen_loot: Set[Tuple[int, int, int, str]] = set()
 
-    def run(self):
-        self.bot.register_event_handler("tick", self.run_once)
-
-    def stop(self):
-        self.bot.unregister_event_handler("tick", self.run_once)
-        _l.debug("LootFinder stopped.")
-
     def run_once(self, *args, **kwargs):
-        _l.debug("LootFinder run.")
-
         entities = self.bot.entities()
         for entity in entities:
             entity_coord = entity[0]

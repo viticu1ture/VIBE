@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import time
 
 from vibe.actions.action import Action
 
@@ -10,50 +12,64 @@ class EfficientEat(Action):
     Note: you do not get the slowdown effect of eating when using this action, making it a hack.
     """
     IS_HACK = True
+    PANIC_THRESHOLD = 6
+    FOOD_BLACKLIST = {
+        "enchanted_golden_apple", "rotten_flesh", "pufferfish", "poisonous_potato", "spider_eye",
+        "suspicious_stew"
+    }
+    RUN_INTERVAL = 18
 
     def __init__(self, bot, *args, **kwargs):
-        super().__init__("Efficient Eat", self.__class__.__doc__.strip(), bot, *args, **kwargs)
+        super().__init__("Efficient Eat", self.__class__.__doc__.strip(), bot, *args, run_event="tick", **kwargs)
 
-    def run(self, *args, **kwargs):
-        # register on hunger change events
-        self.bot.register_event_handler("health", self.run_once)
+    def run_once(self, *args, tick_count=0, **kwargs):
+        if tick_count != self.RUN_INTERVAL:
+            return
 
-    def stop(self):
-        # unregister on hunger change events
-        self.bot.unregister_event_handler("health", self.run_once)
-        _l.debug("EfficientEat stopped.")
-
-    def run_once(self, *args, **kwargs):
         hunger = self.bot.hunger
         _l.debug("Hunger: %s", hunger)
         if hunger == self.bot.MAX_HUNGER:
             _l.debug("Hunger is full, not eating.")
             return
 
-        inv_slot, food_points = self.find_best_food()
-        if inv_slot is None:
-            _l.debug("No food found in inventory, not eating.")
+        # check if we are in panic mode
+        if hunger <= self.PANIC_THRESHOLD:
+            _l.warning("Hunger somehow got too low, eating food...")
+            max_attempts = 5
+            attempt = 0
+            while self.bot.hunger < self.bot.MAX_HUNGER:
+                self.bot.safe_eat()
+                attempt += 1
+                if attempt >= max_attempts:
+                    _l.warning("Failed to eat food after %d attempts, giving up.", max_attempts)
+                    break
             return
 
-        _l.debug("Found food in slot %d with food points %d", inv_slot, food_points)
+        inv_slot, potential_food_points = self.find_best_food()
+        if inv_slot is None:
+            _l.info("No food found in inventory, not eating.")
+            return
+        if potential_food_points is None:
+            _l.info("Food points is None, not eating.")
+            return
+
+        _l.debug("Found food in slot %d with food points %d", inv_slot, potential_food_points)
 
         needed_food = self.bot.MAX_HUNGER - hunger
-        if food_points <= needed_food:
-            _l.info("Eating food with %s points...", food_points)
+        if potential_food_points <= needed_food:
+            _l.info("Eating food with %s points...", potential_food_points)
             self.bot.equip_inventory_item(inv_slot)
-            with self.bot.activate_item_lock:
-                self.bot.mf_bot.deactivateItem()
-                self.bot.mf_bot.consume()
+            self.bot.safe_eat()
             _l.info("Food consumed!")
         else:
-            _l.debug("Not enough food points, only %s points", food_points)
+            _l.debug("Not enough food points, only %s points", potential_food_points)
 
     def find_best_food(self) -> tuple[int | None, int | None]:
         # first thing, find all the food items in the inventory
         food_slots = {}
         for slot, food in self.bot.inventory.items():
             food_data = self.bot.is_food_item(food)
-            if food_data:
+            if food_data and food_data.name not in self.FOOD_BLACKLIST:
                 food_slots[slot] = food_data.foodPoints
 
         # if there are no food items, return

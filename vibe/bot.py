@@ -1,4 +1,6 @@
 import logging
+import os
+import sys
 import threading
 import time
 from collections import defaultdict
@@ -8,17 +10,17 @@ from javascript import require, On
 from vibe.constants import PLAYER_ENTITY, STORAGE_BLOCKS, NETHER_BRICKS, BLACKSTONE_BLOCKS, DIM_NETHER, DIM_OVERWORLD, \
     SPAWNER_BLOCK, CHEST_BLOCK
 from vibe.utils import distance_vec3, coor_to_vec3, vec3_to_coor
+from vibe import DEBUG
 
 vec3 = require('vec3').Vec3
 
 _l = logging.getLogger(__name__)
 
-DEBUG = True
-
 class Bot:
     DEFAULT_USERNAME="vibe_bot"
     MAX_HUNGER=20
     MAX_HEALTH=20
+    MAX_TICK_COUNT=200 # should be about 10 seconds
 
     def __init__(self, host="localhost", port=25565, username="vibe_bot", mc_version=None, no_auth=False):
         self.mc_host = host
@@ -44,8 +46,13 @@ class Bot:
         self.register_event_handler("login", self.handle_login)
         self.register_event_handler("spawn", self.handle_spawn)
         self.register_event_handler("kicked", self.handle_kicked)
+        self.register_event_handler("death", self.handle_death)
+        self.register_event_handler("message", self.handle_message)
 
         self.do_handlers = True
+        self.spawn_count = 0
+        self.tick_count = 0
+        self.pathfinding_paused = False
 
     #
     # Interaction
@@ -55,6 +62,7 @@ class Bot:
         require("canvas")
         self.mineflayer_viewer = None
         self.pathfinder = require("mineflayer-pathfinder")
+        self.armor_manager = require("mineflayer-armor-manager")
         self.mc_data = require("minecraft-data")(self.mc_version)
 
     def connect(self):
@@ -66,6 +74,7 @@ class Bot:
             "port": self.mc_port,
             "username": self.username,
             "hideErrors": False,
+            "checkTimeoutInterval": 60 * 10000
         }
         if not self._no_auth and self.username != self.DEFAULT_USERNAME:
             arg_dict["auth"] = "microsoft"
@@ -76,6 +85,7 @@ class Bot:
 
         # load plugins
         self.mf_bot.loadPlugin(self.pathfinder.pathfinder)
+        self.mf_bot.loadPlugin(self.armor_manager)
 
         #
         # create stubs for the bot events
@@ -87,8 +97,11 @@ class Bot:
 
         @On(self.mf_bot, "chat")
         def _on_chat(username, message, *args):
-            _l.info("Chat received: %s", message)
             self.handle_event("chat", username, message, *args)
+
+        @On(self.mf_bot, "messagestr")
+        def _on_message(*args):
+            self.handle_event("message", *args)
 
         @On(self.mf_bot, "spawn")
         def _on_spawn(*args):
@@ -114,13 +127,18 @@ class Bot:
         def _on_health(*args):
             self.handle_event("health", *args)
 
+        self.tick_count = 0
         @On(self.mf_bot, "physicsTick")
         def _on_tick(*args):
-            self.handle_event("tick", *args)
+            self.tick_count += 1
+            if self.tick_count % 20 == 0:
+                self.tick_count = 0
+
+            self.handle_event("tick", *args, tick_count=self.tick_count)
 
         self.do_handlers = True
 
-    def disconnect(self):
+    def disconnect(self, should_exit=False):
         """
         Disconnect the bot from the server.
         """
@@ -133,6 +151,10 @@ class Bot:
 
             self.mf_bot.end()
             self.mf_bot = None
+
+        if should_exit:
+            _l.info("Bot shutting down...")
+            os._exit(0)
 
     def reconnect(self, wait_time=10):
         """
@@ -150,6 +172,12 @@ class Bot:
         It will be replaced with the actual strategy in the future.
         """
         from .strategies.nether_highway import NetherHighwayStrategy
+
+        _l.info("Waiting for bot to spawn...")
+        # TODO: FIX ME AND THE AUTO EATER FOR 2b2t
+        while self.spawn_count < 2:
+            time.sleep(1)
+
         strat = NetherHighwayStrategy(self, coordinate)
         strat.start()
 
@@ -197,14 +225,28 @@ class Bot:
     def handle_login(self, *args):
         _l.info(f"Bot %s has logged in to the server %s:%s", self.username, self.mc_host, self.mc_port)
         # create the viewer
-        self.mineflayer_viewer = require("prismarine-viewer").mineflayer
-        self.mineflayer_viewer(
-            self.mf_bot, {"port": 3007, "firstPerson": True}
-        )
-        self._viewer_started = True
+        if not self._viewer_started:
+            _l.info("Viewer disabled for long run!")
+            #self.mineflayer_viewer = require("prismarine-viewer").mineflayer
+            #self.mineflayer_viewer(
+            #    self.mf_bot, {"port": 3007, "firstPerson": True}
+            #)
+            #self._viewer_started = True
 
     def handle_spawn(self, *args):
         _l.info(f"Bot %s has spawned in the world", self.username)
+        self.spawn_count += 1
+
+    def handle_death(self, *args):
+        pos = self.coordinates
+        _l.info(f"Bot %s has died at %s", self.username, pos)
+
+    def handle_message(self, *args):
+        _, message = args[:2]
+        sender, _ = args[2:4]
+        if self.username in message:
+            _l.info(f"Important message: '%s'", message)
+
 
     def handle_kicked(self, this, reason, logged_in, *args):
         _l.info(f"Bot %s has been kicked from the server for reason: %s", self.username, reason)
@@ -218,6 +260,9 @@ class Bot:
         """
         Get the current coordinates of the bot.
         """
+        if self.mf_bot is None or self.mf_bot.entity is None:
+            return None
+
         position = self.mf_bot.entity.position
         return (position["x"], position["y"], position["z"]) if position else None
 
@@ -254,6 +299,15 @@ class Bot:
     #
     # Common Actions
     #
+
+    def safe_eat(self):
+        _l.info(f"Bot pausing pathfinding to eat!")
+        with self.activate_item_lock:
+            self.pathfinding_paused = True
+            self.mf_bot.pathfinder.stop()
+            self.mf_bot.deactivateItem()
+            self.mf_bot.consume()
+        return True
 
     def item_in_hand(self, offhand=False) -> object | None:
         """
@@ -367,7 +421,11 @@ class Bot:
         - The entity name/type
         """
         entities = []
-        entity_nums = list(self.mf_bot.entities)
+        _mf_entities = self.mf_bot.entities
+        if _mf_entities is None or str(_mf_entities) == "{}":
+            return entities
+
+        entity_nums = list(_mf_entities)
         for entity_num in entity_nums:
             entity = self.mf_bot.entities[entity_num]
             if entity is None:

@@ -69,7 +69,11 @@ class GotoLocation(Action):
         if self.log_interval and dist_since_log is not None and dist_since_log >= self.log_interval:
             time_since_log = time.time() - self._last_log_time
             move_rate_sec = dist_since_log // time_since_log
-            time_walk_str_hms = time.strftime("%H:%M:%S", time.gmtime(move_rate_sec))
+            dist_to_goal = distance_vec3(vec3_current, self._vec3_target)
+            if dist_to_goal is None:
+                dist_to_goal = 0
+            time_to_goal = dist_to_goal // move_rate_sec
+            time_walk_str_hms = time.strftime("%H:%M:%S", time.gmtime(time_to_goal))
             _l.info("Bot %s is at %s with hunger %s and health %s. New estimated walk time %s", self.bot.username, current_coordinate, self.bot.hunger, self.bot.health, time_walk_str_hms)
             self._last_log_coor = vec3_current
             self._last_log_time = time.time()

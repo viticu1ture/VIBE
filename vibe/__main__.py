@@ -56,10 +56,16 @@ def main():
         help="Use nether strategy. Takes a coordinate in the format x,z",
         default=None,
     )
+    parser.add_argument(
+        "--no-view",
+        action="store_true",
+        help="Disable web viewer",
+        default=False,
+    )
 
     args = parser.parse_args()
     # Create a bot instance
-    bot = Bot(host=args.host, port=args.port, username=args.username, mc_version=args.mc_version, no_auth=args.no_auth)
+    bot = Bot(host=args.host, port=args.port, username=args.username, mc_version=args.mc_version, no_auth=args.no_auth, viewer=not args.no_view)
     bot.connect()
     time.sleep(2)
     if args.nether_strategy:

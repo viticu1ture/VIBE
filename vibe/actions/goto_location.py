@@ -15,6 +15,7 @@ class GotoLocation(Action):
     def __init__(self, bot, coordinate: tuple[float, float, float], *args, log_interval=1000, exit_on_dst=True, **kwargs):
         super().__init__("Goto Location", self.__class__.__doc__.strip(), bot, *args, run_event="tick", **kwargs)
         self.target_coordinate = coordinate
+        self.bot.goto_goal = coordinate
         self._vec3_target = coor_to_vec3(self.target_coordinate)
 
         self._last_log_coor = None
@@ -30,16 +31,15 @@ class GotoLocation(Action):
         self._last_log_coor = None
 
     def run_once(self, *args, tick_count=0, **kwargs):
-        if not self.running or self.bot.pathfinding_paused:
+        if tick_count != self.RUN_INTERVAL:
+            return
+
+        if not self.running:
             self.running = True
-            self.bot.pathfinding_paused = False
             time_est = walk_time(self._vec3_target, coor_to_vec3(self.bot.coordinates))
             time_est_str_hms = time.strftime("%H:%M:%S", time.gmtime(time_est))
             _l.info("Pathfinding to %s from %s. Estimate: %s", self.target_coordinate, self.bot.coordinates, time_est_str_hms)
             self.bot.goto(*self.target_coordinate)
-            return
-
-        if tick_count != self.RUN_INTERVAL:
             return
 
         current_coordinate = self.bot.coordinates
@@ -67,5 +67,5 @@ class GotoLocation(Action):
         if self.log_interval and dist_since_log is not None and dist_since_log >= self.log_interval:
             est_walk_time_s = walk_time(self._vec3_target, vec3_current)
             time_walk_str_hms = time.strftime("%H:%M:%S", time.gmtime(est_walk_time_s))
-            _l.info("Bot %s is at %s with hunger %d and health %d. Estimated walk time %s", self.bot.username, current_coordinate, time_walk_str_hms, self.bot.hunger, self.bot.health)
+            _l.info("Bot %s is at %s with hunger %d and health %d. Estimated walk time %s", self.bot.username, current_coordinate, self.bot.hunger, self.bot.health, time_walk_str_hms)
             self._last_log_coor = vec3_current

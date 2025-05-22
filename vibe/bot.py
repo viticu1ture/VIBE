@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import sys
@@ -22,7 +23,7 @@ class Bot:
     MAX_HEALTH=20
     MAX_TICK_COUNT=200 # should be about 10 seconds
 
-    def __init__(self, host="localhost", port=25565, username="vibe_bot", mc_version=None, no_auth=False):
+    def __init__(self, host="localhost", port=25565, username="vibe_bot", mc_version=None, no_auth=False, viewer=True):
         self.mc_host = host
         self.mc_port = port
         self.mc_version = mc_version
@@ -39,6 +40,7 @@ class Bot:
 
         self.mf_bot: "mineflayer.Bot" = None
         self.activate_item_lock = threading.Lock()
+        self._viewer_enabled = viewer
         self._viewer_started = False
 
         # format: {event_name: [handler1, handler2, ...]}
@@ -53,6 +55,8 @@ class Bot:
         self.spawn_count = 0
         self.tick_count = 0
         self.pathfinding_paused = False
+        self.is_2b2t = "2b2t" in self.mc_host
+        self.goto_goal = None
 
     #
     # Interaction
@@ -64,6 +68,23 @@ class Bot:
         self.pathfinder = require("mineflayer-pathfinder")
         self.armor_manager = require("mineflayer-armor-manager")
         self.mc_data = require("minecraft-data")(self.mc_version)
+        self.auto_eat = require("mineflayer-auto-eat").loader
+
+    def _load_plugins(self):
+        # load plugins
+        self.mf_bot.loadPlugin(self.pathfinder.pathfinder)
+        self.mf_bot.loadPlugin(self.armor_manager)
+        self.mf_bot.loadPlugin(self.auto_eat)
+
+        # wait for pathfinder to load
+        start_time = time.time()
+        max_wait = 5
+        while self.mf_bot.pathfinder is None or self.mf_bot.pathfinder.setGoal is None:
+            if time.time() - start_time > max_wait:
+                _l.warning("Pathfinder plugin not loaded")
+                break
+
+            time.sleep(0.1)
 
     def connect(self):
         _l.info("Connecting to server...")
@@ -82,10 +103,10 @@ class Bot:
             arg_dict["version"] = self.mc_version
 
         self.mf_bot = self.mineflayer.createBot(arg_dict)
+        self.mf_bot._client.setMaxListeners(0)
+        self.mf_bot.inventory.setMaxListeners(0)
 
-        # load plugins
-        self.mf_bot.loadPlugin(self.pathfinder.pathfinder)
-        self.mf_bot.loadPlugin(self.armor_manager)
+        self._load_plugins()
 
         #
         # create stubs for the bot events
@@ -174,8 +195,8 @@ class Bot:
         from .strategies.nether_highway import NetherHighwayStrategy
 
         _l.info("Waiting for bot to spawn...")
-        # TODO: FIX ME AND THE AUTO EATER FOR 2b2t
-        while self.spawn_count < 2:
+        needed_cnt = 2 if self.is_2b2t else 1
+        while self.spawn_count < needed_cnt:
             time.sleep(1)
 
         strat = NetherHighwayStrategy(self, coordinate)
@@ -225,13 +246,17 @@ class Bot:
     def handle_login(self, *args):
         _l.info(f"Bot %s has logged in to the server %s:%s", self.username, self.mc_host, self.mc_port)
         # create the viewer
+        if not self._viewer_enabled:
+            _l.info("Web viewer disabled, not starting")
+            return
+
         if not self._viewer_started:
-            _l.info("Viewer disabled for long run!")
-            #self.mineflayer_viewer = require("prismarine-viewer").mineflayer
-            #self.mineflayer_viewer(
-            #    self.mf_bot, {"port": 3007, "firstPerson": True}
-            #)
-            #self._viewer_started = True
+            self.mineflayer_viewer = require("prismarine-viewer").mineflayer
+            self.mineflayer_viewer(
+                self.mf_bot, {"port": 3007, "firstPerson": True}
+            )
+            self._viewer_started = True
+
 
     def handle_spawn(self, *args):
         _l.info(f"Bot %s has spawned in the world", self.username)
@@ -300,13 +325,37 @@ class Bot:
     # Common Actions
     #
 
-    def safe_eat(self):
-        _l.info(f"Bot pausing pathfinding to eat!")
-        with self.activate_item_lock:
-            self.pathfinding_paused = True
+    def eat(self, max_wait=5):
+        """
+        Eats food that is currently in the bot's hand.
+
+        XXX: For whatever ungodly reason, this function will not work if the pathfinder is running on a
+        server like 2b2t. Thus, we need to stop the pathfinder before eating, and then resume it after eating.
+
+        :param max_wait:
+        :return:
+        """
+        if self.goto_goal and self.is_2b2t:
+            _l.info("Pausing pathfinding to eat...")
             self.mf_bot.pathfinder.stop()
+
+        with self.activate_item_lock:
             self.mf_bot.deactivateItem()
-            self.mf_bot.consume()
+            self.mf_bot.activateItem()
+
+        pre_eat = self.hunger
+        start_time = time.time()
+        while self.hunger <= pre_eat:
+            if time.time() - start_time > max_wait:
+                _l.warning("Timed out waiting for food to be eaten")
+                return False
+
+            time.sleep(0.1)
+
+        if self.goto_goal and self.is_2b2t:
+            _l.info("Goto goal resumed!")
+            self.goto(*self.goto_goal)
+
         return True
 
     def item_in_hand(self, offhand=False) -> object | None:

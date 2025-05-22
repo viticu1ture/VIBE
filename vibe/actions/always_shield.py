@@ -12,22 +12,25 @@ class AlwaysShield(Action):
     Note: you do not get the slowdown effect of the shield when using this action, making it a hack.
     """
     IS_HACK = True
+    RUN_INTERVAL = 19
 
     def __init__(self, bot, *args, **kwargs):
         super().__init__("Always Shield", self.__class__.__doc__.strip(), bot, *args, run_event="tick", **kwargs)
 
-    def run_once(self, *args, **kwargs):
-        with self.bot.activate_item_lock:
-            # equip the shield if we have one available
-            shield_in_offhand = self.bot.equip_shield()
+    def run_once(self, *args, tick_count=0, **kwargs):
+        if tick_count != self.RUN_INTERVAL:
+            return
 
-            if shield_in_offhand:
+        # equip the shield if we have one available
+        shield_in_offhand = self.bot.equip_shield()
+        if shield_in_offhand:
+            with self.bot.activate_item_lock:
                 shield_activated = self.bot.mf_bot.usingHeldItem
                 if not shield_activated:
                     self.bot.mf_bot.activateItem(True)
-            else:
-                _l.debug("No shield found in offhand, not activating.")
-                return False
+        else:
+            _l.debug("No shield found in offhand, not activating.")
+            return False
 
         # TODO: make it always look at the nearest entity (glitches when running)
         # get the nearest entity and point to it

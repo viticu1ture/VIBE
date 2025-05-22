@@ -21,7 +21,7 @@ class LootFinder(Action):
         super().__init__("Loot Finder", "Monitors for valuable items in the environment", bot, run_event="tick")
         self.seen_loot: Set[Tuple[int, int, int, str]] = set()
 
-    def run_once(self, *args, **kwargs):
+    def run_once(self, *args, tick_count=0, **kwargs):
         entities = self.bot.entities()
         for entity in entities:
             entity_coord = entity[0]

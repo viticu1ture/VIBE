@@ -20,29 +20,44 @@ class EfficientEat(Action):
     RUN_INTERVAL = 18
 
     def __init__(self, bot, *args, **kwargs):
-        super().__init__("Efficient Eat", self.__class__.__doc__.strip(), bot, *args, run_event="tick", **kwargs)
+        super().__init__("Efficient Eat", self.__class__.__doc__.strip(), bot, *args, run_event="tick",**kwargs)
+
+    #def start(self):
+    #    _l.info("Enabling autoeat...")
+    #    # register the autoeat action
+    #    self.bot.mf_bot.autoEat.setOpts({
+    #        "bannedFood": list(self.FOOD_BLACKLIST),
+    #        "minFood": 12,
+    #        "eatingTimeout": 3000
+    #    })
+    #    self.bot.mf_bot.autoEat.enableAuto()
+
+    #    self.bot.mf_bot.autoEat.on("eatStart", self._on_eat)
+    #    self.bot.mf_bot.autoEat.on("eatFinish", self._on_eat_finish)
+    #    self.bot.mf_bot.autoEat.on("eatFail", self._on_eat_fail)
+
+    #def _on_eat(self, *args, **kwargs):
+    #    _l.info("Eating...")
+
+    #def _on_eat_finish(self, *args, **kwargs):
+    #    _l.info("Finished eating.")
+
+    #def _on_eat_fail(self, error, *args, **kwargs):
+    #    _l.warning("Failed to eat food: %s", error)
+
+    #def stop(self):
+    #    self.bot.mf_bot.autoEat.disableAuto()
 
     def run_once(self, *args, tick_count=0, **kwargs):
         if tick_count != self.RUN_INTERVAL:
             return
 
+        _l.debug("Doing efficient eat check...")
+
         hunger = self.bot.hunger
         _l.debug("Hunger: %s", hunger)
         if hunger == self.bot.MAX_HUNGER:
             _l.debug("Hunger is full, not eating.")
-            return
-
-        # check if we are in panic mode
-        if hunger <= self.PANIC_THRESHOLD:
-            _l.warning("Hunger somehow got too low, eating food...")
-            max_attempts = 5
-            attempt = 0
-            while self.bot.hunger < self.bot.MAX_HUNGER:
-                self.bot.safe_eat()
-                attempt += 1
-                if attempt >= max_attempts:
-                    _l.warning("Failed to eat food after %d attempts, giving up.", max_attempts)
-                    break
             return
 
         inv_slot, potential_food_points = self.find_best_food()
@@ -54,12 +69,23 @@ class EfficientEat(Action):
             return
 
         _l.debug("Found food in slot %d with food points %d", inv_slot, potential_food_points)
-
         needed_food = self.bot.MAX_HUNGER - hunger
-        if potential_food_points <= needed_food:
+        # check if we are in panic mode
+        if hunger <= self.PANIC_THRESHOLD:
+            _l.warning("Hunger somehow got too low, eating food...")
+            max_attempts = 5
+            attempt = 0
+            while self.bot.hunger < self.bot.MAX_HUNGER:
+                self.bot.equip_inventory_item(inv_slot)
+                self.bot.eat()
+                attempt += 1
+                if attempt >= max_attempts:
+                    _l.warning("Failed to eat food after %d attempts, giving up.", max_attempts)
+                    break
+        elif potential_food_points <= needed_food:
             _l.info("Eating food with %s points...", potential_food_points)
             self.bot.equip_inventory_item(inv_slot)
-            self.bot.safe_eat()
+            self.bot.eat()
             _l.info("Food consumed!")
         else:
             _l.debug("Not enough food points, only %s points", potential_food_points)

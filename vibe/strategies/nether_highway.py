@@ -46,11 +46,11 @@ class NetherHighwayStrategy(Strategy):
         """
         # then start the actions
         self._actions = [
-            GotoLocation(self.bot, self.target_coordinate, log_interval=2500),
+            GotoLocation(self.bot, self.target_coordinate, log_interval=1000),
             EmergencyQuit(self.bot, player_reconnect_timer=60, reconnect_handler=self.restart_handler),
             EfficientEat(self.bot),
             LootFinder(self.bot),
-            #AlwaysShield(self.bot),
+            AlwaysShield(self.bot),
         ]
         for action in self._actions:
             action.start()

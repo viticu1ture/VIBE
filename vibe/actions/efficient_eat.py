@@ -87,7 +87,7 @@ class EfficientEat(Action):
             self.bot.equip_inventory_item(inv_slot)
             eaten = self.bot.eat()
             if eaten:
-                _l.info("Bot successfully ate.", self.bot.username)
+                _l.info("Bot successfully ate")
         else:
             _l.debug("Not enough food points, only %s points", potential_food_points)
 

@@ -19,6 +19,7 @@ class GotoLocation(Action):
         self._vec3_target = coor_to_vec3(self.target_coordinate)
 
         self._last_log_coor = None
+        self._last_log_time = None
         self.log_interval = log_interval
         self.running = False
         self.exit_on_dst = exit_on_dst
@@ -36,7 +37,7 @@ class GotoLocation(Action):
 
         if not self.running:
             self.running = True
-            time_est = walk_time(self._vec3_target, coor_to_vec3(self.bot.coordinates))
+            time_est = walk_time(self._vec3_target, coor_to_vec3(self.bot.coordinates), stop_and_eat=True)
             time_est_str_hms = time.strftime("%H:%M:%S", time.gmtime(time_est))
             _l.info("Pathfinding to %s from %s. Estimate: %s", self.target_coordinate, self.bot.coordinates, time_est_str_hms)
             self.bot.goto(*self.target_coordinate)
@@ -62,10 +63,13 @@ class GotoLocation(Action):
         vec3_current = coor_to_vec3(current_coordinate)
         if self._last_log_coor is None:
             self._last_log_coor = vec3_current
+            self._last_log_time = time.time()
 
         dist_since_log = distance_vec3(self._last_log_coor, vec3_current)
         if self.log_interval and dist_since_log is not None and dist_since_log >= self.log_interval:
-            est_walk_time_s = walk_time(self._vec3_target, vec3_current)
-            time_walk_str_hms = time.strftime("%H:%M:%S", time.gmtime(est_walk_time_s))
-            _l.info("Bot %s is at %s with hunger %d and health %d. Estimated walk time %s", self.bot.username, current_coordinate, self.bot.hunger, self.bot.health, time_walk_str_hms)
+            time_since_log = time.time() - self._last_log_time
+            move_rate_sec = dist_since_log // time_since_log
+            time_walk_str_hms = time.strftime("%H:%M:%S", time.gmtime(move_rate_sec))
+            _l.info("Bot %s is at %s with hunger %s and health %s. New estimated walk time %s", self.bot.username, current_coordinate, self.bot.hunger, self.bot.health, time_walk_str_hms)
             self._last_log_coor = vec3_current
+            self._last_log_time = time.time()

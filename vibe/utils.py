@@ -6,6 +6,9 @@ from javascript import require
 from math import sqrt, atan2, sin, cos
 
 Vec3  = require('vec3').Vec3
+SPRINT_SPEED = 4.3
+# the sprint speed if you needed to completely stop and eat every time you have 12 hunger (porkchop)
+SPRINT_AND_EAT = 3.82
 
 #
 # Math helper functions
@@ -79,7 +82,7 @@ def distance_vec3(v1, v2):
     dv = sub_vec3(v1, v2)
     return len_vec3(dv)
 
-def walk_time(v1, v2):
+def walk_time(v1, v2, stop_and_eat=False):
     if not v1:
         print("*** error: v1 in walkTime() is null.")
         return None
@@ -87,7 +90,8 @@ def walk_time(v1, v2):
         print("*** error: v2 in walkTime() is null.")
         return None
     d = distance_vec3(v1, v2)
-    return d/4.3+0.1
+    move_rate = SPRINT_SPEED if not stop_and_eat else SPRINT_AND_EAT
+    return d/move_rate+0.1
 
 def get_view_vector (pitch, yaw):
     csPitch = cos(pitch)

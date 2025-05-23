@@ -8,6 +8,7 @@ from ..actions.loot_finder import LootFinder
 from ..actions.goto_location import GotoLocation
 from ..bot import Bot
 from .strategy import Strategy
+from vibe import DEBUG
 
 _l = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class NetherHighwayStrategy(Strategy):
         super().__init__(bot)
         # the coordinate is always assumed to be at y=120
         self.target_coordinate = coordinate
+        self.reconnect_wait_time = 60 if not DEBUG else 5
 
         self._actions = []
 
@@ -36,35 +38,12 @@ class NetherHighwayStrategy(Strategy):
 
     def start(self):
         super().start()
-        self._start_async_events()
-
-    def _start_async_events(self):
-        """
-        All events that should be run on start (or restart) of the bot.
-        This should exclude threads that are already running.
-        :return:
-        """
-        # then start the actions
         self._actions = [
             GotoLocation(self.bot, self.target_coordinate, log_interval=1000),
-            EmergencyQuit(self.bot, player_reconnect_timer=60, reconnect_handler=self.restart_handler),
+            EmergencyQuit(self.bot, reconnect_wait_time=self.reconnect_wait_time),
             EfficientEat(self.bot),
             LootFinder(self.bot),
             #AlwaysShield(self.bot),
         ]
         for action in self._actions:
             action.start()
-
-    def _stop_async_events(self):
-        for action in self._actions:
-            action.stop()
-
-    def restart_handler(self):
-        """
-        Restart the strategy. This is called when the bot is restarted.
-        :return:
-        """
-        _l.debug("Restarting NetherHighwayStrategy...")
-        self._stop_async_events()
-        self.bot.connect()
-        self._start_async_events()

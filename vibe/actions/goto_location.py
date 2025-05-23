@@ -39,7 +39,7 @@ class GotoLocation(Action):
             self.running = True
             time_est = walk_time(self._vec3_target, coor_to_vec3(self.bot.coordinates), stop_and_eat=True)
             time_est_str_hms = time.strftime("%H:%M:%S", time.gmtime(time_est))
-            _l.info("Pathfinding to %s from %s. Estimate: %s", self.target_coordinate, self.bot.coordinates, time_est_str_hms)
+            _l.info("Pathfinding to %s from %s with %s hunger and %s health. Estimate: %s", self.target_coordinate, self.bot.coordinates, self.bot.hunger, self.bot.health, time_est_str_hms)
             self.bot.goto(*self.target_coordinate)
             return
 

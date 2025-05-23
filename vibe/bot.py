@@ -52,6 +52,7 @@ class Bot:
         self.register_event_handler("message", self.handle_message)
 
         self.do_handlers = True
+        self.ticks_active = False
         self.spawn_count = 0
         self.tick_count = 0
         self.pathfinding_paused = False
@@ -103,9 +104,6 @@ class Bot:
             arg_dict["version"] = self.mc_version
 
         self.mf_bot = self.mineflayer.createBot(arg_dict)
-        self.mf_bot._client.setMaxListeners(0)
-        self.mf_bot.inventory.setMaxListeners(0)
-
         self._load_plugins()
 
         #
@@ -158,6 +156,7 @@ class Bot:
             self.handle_event("tick", *args, tick_count=self.tick_count)
 
         self.do_handlers = True
+        _l.info("Connected to server %s:%s as %s", self.mc_host, self.mc_port, self.username)
 
     def disconnect(self, should_exit=False):
         """
@@ -165,6 +164,8 @@ class Bot:
         """
         _l.info("Disconnecting from server...")
         self.do_handlers = False
+        self.ticks_active = False
+        self.spawn_count = 0
         if self.mf_bot:
             if self._viewer_started:
                 self.mf_bot.viewer.close()
@@ -177,7 +178,7 @@ class Bot:
             _l.info("Bot shutting down...")
             os._exit(0)
 
-    def reconnect(self, wait_time=10):
+    def reconnect(self, wait_time=10, wait_for_active_ticks=True):
         """
         Disconnect the bot from the server and reconnect after a wait time.
         """
@@ -186,6 +187,21 @@ class Bot:
         time.sleep(wait_time)
         self.connect()
 
+    def wait_for_active_ticks(self, max_wait=60):
+        """
+        Wait for the bot to be active in the world.
+        :param max_wait: The maximum time to wait for the bot to be active.
+        """
+        if self.ticks_active:
+            return True
+
+        start_time = time.time()
+        while not self.ticks_active:
+            if time.time() - start_time > max_wait:
+                _l.critical("Timed out waiting for bot to be active. Shutting down...")
+                self.disconnect(should_exit=True)
+            time.sleep(1)
+        return True
 
     def do_nether_strategy(self, coordinate):
         """
@@ -230,7 +246,7 @@ class Bot:
     def handle_event(self, event_name, *args, **kwargs):
         handlers = self.event_handlers.get(event_name, [])
         for handler in handlers:
-            if not self.do_handlers:
+            if not self.do_handlers or (event_name == "tick" and not self.ticks_active):
                 _l.debug("Skipping event %s, handlers disabled", event_name)
                 return
 
@@ -261,6 +277,11 @@ class Bot:
     def handle_spawn(self, *args):
         _l.info(f"Bot %s has spawned in the world", self.username)
         self.spawn_count += 1
+        if self.is_2b2t:
+            if self.spawn_count > 2:
+                self.ticks_active = True
+        else:
+            self.ticks_active = True
 
     def handle_death(self, *args):
         pos = self.coordinates
@@ -440,10 +461,23 @@ class Bot:
         # set the goal
         # create a Vec3 object for the target position
         target_pos = vec3(x, y, z)
-        self.mf_bot.pathfinder.setGoal(
-            self.pathfinder.goals.GoalNear(target_pos.x, target_pos.y, target_pos.z)
-        )
 
+        max_attempts = 5
+        attempt = 0
+        while attempt < max_attempts:
+            attempt += 1
+            try:
+                self.mf_bot.pathfinder.setGoal(
+                    self.pathfinder.goals.GoalNear(target_pos.x, target_pos.y, target_pos.z)
+                )
+                worked = True
+            except Exception as e:
+                _l.warning(f"Failed to set goal: {e}")
+                time.sleep(1)
+                continue
+
+            if worked:
+                break
 
     def print_coordinates_loop(self):
         """

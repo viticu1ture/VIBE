@@ -19,28 +19,27 @@ class EmergencyQuit(Action):
     """
     HEALTH_THRESHOLD = 10
     STUCK_THRESHOLD = 30
+    MAX_CONSECUTIVE_RECONNECTS = 3
+    CONSECUTIVE_RECONNECT_TIME = 5 * 60  # 5 minutes
 
     def __init__(
         self,
         bot: Bot,
-        player_reconnect_timer: int = None,
-        reconnect_handler: Optional[callable] = None,
+        reconnect_wait_time: int = None,
         check_food: bool = True,
         check_stuck: bool = True,
         check_players: bool = True,
     ):
         super().__init__("Emergency Quit", "Emergency quit action that monitors health, food, reconnects, movement, and players", bot, run_event="tick")
 
-        self._player_reconnect_timer = player_reconnect_timer
-        self._reconnect_handler = reconnect_handler
+        self._reconnect_wait_time = reconnect_wait_time
         self._check_food = check_food
         self._check_stuck = check_stuck
         self._check_players = check_players
 
         self._last_pos: Optional[Tuple[float, float, float]] = None
         self._last_pos_time: float | None = None
-        self.consecutive_reconnects: int = 0
-        self.last_reconnect_time: float = 0
+        # TODO: add a way to check total reconnects
 
     def run_once(self, *args, **kwargs):
         # Check health
@@ -60,11 +59,9 @@ class EmergencyQuit(Action):
 
                 if entity_type == PLAYER_ENTITY and entity_sub_name not in self.bot.player_whitelist:
                     _l.critical("Emergency quit: Non-whitelisted player '%s' detected at %s", entity_sub_name, entity_coord)
-                    if self._player_reconnect_timer is not None and self._reconnect_handler is not None:
-                        self.bot.disconnect()
-                        _l.info("Waiting %d seconds before reconnecting...", self._player_reconnect_timer)
-                        time.sleep(self._player_reconnect_timer)
-                        self._reconnect_handler()
+                    if self._reconnect_wait_time is not None:
+                        _l.info("Waiting %d seconds before reconnecting...", self._reconnect_wait_time)
+                        self.bot.reconnect(wait_time=self._reconnect_wait_time)
                     else:
                         self.bot.disconnect(should_exit=True)
                     return
@@ -84,21 +81,31 @@ class EmergencyQuit(Action):
         # Check if stuck
         if self._check_stuck:
             current_pos = self.bot.coordinates
+
             if current_pos is not None:
                 current_time = time.time()
+                if self._last_pos_time is None:
+                    self._last_pos_time = current_time
+                if self._last_pos is None:
+                    self._last_pos = current_pos
 
                 if self._last_pos is not None and self._last_pos_time is not None:
+                    x_dist = abs(current_pos[0] - self._last_pos[0])
+                    z_dist = abs(current_pos[2] - self._last_pos[2])
+
                     # Only check x and z coordinates
-                    if abs(current_pos[0] - self._last_pos[0]) < 1 and abs(current_pos[2] - self._last_pos[2]) < 1:
-                        if current_time - self._last_pos_time >= self.STUCK_THRESHOLD:
+                    if x_dist < 1 and z_dist < 1:
+                        stuck_time = current_time - self._last_pos_time
+                        if stuck_time >= self.STUCK_THRESHOLD:
                             _l.critical("current_pos: %s, last_pos: %s, current_time: %s, last_pos_time: %s", current_pos, self._last_pos, current_time, self._last_pos_time)
-                            _l.critical("Emergency quit: Bot is stuck at position %s for %d seconds", current_pos, self.STUCK_THRESHOLD)
-                            self.bot.disconnect(should_exit=True)
-                            return
+                            _l.critical("Emergency quit: Bot is stuck at position %s for %d seconds. Attempting to reconnect...", current_pos, self.STUCK_THRESHOLD)
+                            self.bot.reconnect(wait_time=self._reconnect_wait_time)
+                            # attempt to force a movement
+                            self.bot.goto(*self.bot.goto_goal)
+                            self._last_pos = None
+                            self._last_pos_time = None
                     else:
                         self._last_pos_time = current_time
-                self._last_pos = current_pos
+                        self._last_pos = current_pos
             else:
                 _l.warning("Failed to get current position, skipping stuck check...")
-
-        # TODO: add a way to check total reconnects

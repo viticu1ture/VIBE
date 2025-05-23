@@ -39,7 +39,8 @@ class NetherHighwayStrategy(Strategy):
     def start(self):
         super().start()
         self._actions = [
-            GotoLocation(self.bot, self.target_coordinate, log_interval=1000),
+            # should log every 30 minutes at running speed
+            GotoLocation(self.bot, self.target_coordinate, log_interval=10000),
             EmergencyQuit(self.bot, reconnect_wait_time=self.reconnect_wait_time),
             EfficientEat(self.bot),
             LootFinder(self.bot),

@@ -357,7 +357,7 @@ class Bot:
         :return:
         """
         if self.goto_goal and self.is_2b2t:
-            _l.info("Pausing pathfinding to eat...")
+            _l.debug("Pausing pathfinding to eat...")
             self.mf_bot.pathfinder.stop()
 
         with self.activate_item_lock:
@@ -368,13 +368,13 @@ class Bot:
         start_time = time.time()
         while self.hunger <= pre_eat:
             if time.time() - start_time > max_wait:
-                _l.warning("Timed out waiting for food to be eaten")
+                _l.debug("Timed out waiting for food to be eaten")
                 return False
 
             time.sleep(0.1)
 
         if self.goto_goal and self.is_2b2t:
-            _l.info("Goto goal resumed!")
+            _l.debug("Goto goal resumed!")
             self.goto(*self.goto_goal)
 
         return True
@@ -473,7 +473,7 @@ class Bot:
                 )
                 worked = True
             except Exception as e:
-                _l.warning(f"Failed to set goal: {e}")
+                _l.debug(f"Failed to set goal: {e}")
                 time.sleep(1)
                 continue
 

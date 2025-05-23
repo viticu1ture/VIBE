@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 from ..bot import Bot
 from ..constants import PLAYER_ENTITY
 from .action import Action
+from .efficient_eat import EfficientEat
 
 _l = logging.getLogger(__name__)
 
@@ -71,8 +72,9 @@ class EmergencyQuit(Action):
             items = self.bot.inventory.values()
             if items:
                 food_items = [item for item in items if self.bot.is_food_item(item)]
-                if not food_items:
-                    _l.critical("Emergency quit: No food items in inventory")
+                valid_food_items = [item for item in food_items if item.name and item.name not in EfficientEat.FOOD_BLACKLIST]
+                if not valid_food_items:
+                    _l.critical("Emergency quit: No valid food items in inventory")
                     self.bot.disconnect(should_exit=True)
                     return
             else:

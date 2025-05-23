@@ -22,32 +22,6 @@ class EfficientEat(Action):
     def __init__(self, bot, *args, **kwargs):
         super().__init__("Efficient Eat", self.__class__.__doc__.strip(), bot, *args, run_event="tick",**kwargs)
 
-    #def start(self):
-    #    _l.info("Enabling autoeat...")
-    #    # register the autoeat action
-    #    self.bot.mf_bot.autoEat.setOpts({
-    #        "bannedFood": list(self.FOOD_BLACKLIST),
-    #        "minFood": 12,
-    #        "eatingTimeout": 3000
-    #    })
-    #    self.bot.mf_bot.autoEat.enableAuto()
-
-    #    self.bot.mf_bot.autoEat.on("eatStart", self._on_eat)
-    #    self.bot.mf_bot.autoEat.on("eatFinish", self._on_eat_finish)
-    #    self.bot.mf_bot.autoEat.on("eatFail", self._on_eat_fail)
-
-    #def _on_eat(self, *args, **kwargs):
-    #    _l.info("Eating...")
-
-    #def _on_eat_finish(self, *args, **kwargs):
-    #    _l.info("Finished eating.")
-
-    #def _on_eat_fail(self, error, *args, **kwargs):
-    #    _l.warning("Failed to eat food: %s", error)
-
-    #def stop(self):
-    #    self.bot.mf_bot.autoEat.disableAuto()
-
     def run_once(self, *args, tick_count=0, **kwargs):
         if tick_count != self.RUN_INTERVAL:
             return
@@ -83,11 +57,11 @@ class EfficientEat(Action):
                     _l.warning("Failed to eat food after %d attempts, giving up.", max_attempts)
                     break
         elif potential_food_points <= needed_food:
-            _l.info("Eating food with %s points...", potential_food_points)
+            _l.debug("Eating food with %s points...", potential_food_points)
             self.bot.equip_inventory_item(inv_slot)
             eaten = self.bot.eat()
             if eaten:
-                _l.info("Bot successfully ate")
+                _l.info("Bot successfully ate food with %s points", potential_food_points)
         else:
             _l.debug("Not enough food points, only %s points", potential_food_points)
 

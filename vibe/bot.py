@@ -278,7 +278,7 @@ class Bot:
         _l.info(f"Bot %s has spawned in the world", self.username)
         self.spawn_count += 1
         if self.is_2b2t:
-            if self.spawn_count > 2:
+            if self.spawn_count >= 2:
                 self.ticks_active = True
         else:
             self.ticks_active = True
@@ -464,6 +464,7 @@ class Bot:
 
         max_attempts = 5
         attempt = 0
+        worked = False
         while attempt < max_attempts:
             attempt += 1
             try:
@@ -478,6 +479,10 @@ class Bot:
 
             if worked:
                 break
+
+        if not worked:
+            _l.critical(f"Failed to set goal after {max_attempts} attempts. Shutting down...")
+            self.disconnect(should_exit=True)
 
     def print_coordinates_loop(self):
         """

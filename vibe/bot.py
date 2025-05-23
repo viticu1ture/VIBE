@@ -346,7 +346,7 @@ class Bot:
     # Common Actions
     #
 
-    def eat(self, max_wait=5):
+    def eat(self, max_wait=5, pause_pathfinding=False) -> bool:
         """
         Eats food that is currently in the bot's hand.
 
@@ -356,24 +356,24 @@ class Bot:
         :param max_wait:
         :return:
         """
-        if self.goto_goal and self.is_2b2t:
+        if self.goto_goal and self.is_2b2t and pause_pathfinding:
             _l.info("Pausing pathfinding to eat...")
             self.mf_bot.pathfinder.stop()
 
+        pre_eat = self.hunger
+        start_time = time.time()
         with self.activate_item_lock:
             self.mf_bot.deactivateItem()
             self.mf_bot.activateItem()
+            while self.hunger <= pre_eat:
+                if time.time() - start_time > max_wait:
+                    _l.warning("Timed out waiting for food to be eaten")
+                    return False
 
-        pre_eat = self.hunger
-        start_time = time.time()
-        while self.hunger <= pre_eat:
-            if time.time() - start_time > max_wait:
-                _l.warning("Timed out waiting for food to be eaten")
-                return False
+                self.mf_bot.activateItem()
+                time.sleep(0.1)
 
-            time.sleep(0.1)
-
-        if self.goto_goal and self.is_2b2t:
+        if self.goto_goal and self.is_2b2t and pause_pathfinding:
             _l.info("Goto goal resumed!")
             self.goto(*self.goto_goal)
 

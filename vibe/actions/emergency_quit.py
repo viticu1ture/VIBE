@@ -18,7 +18,7 @@ class EmergencyQuit(Action):
     - Player entity detected (non-whitelisted)
     """
     HEALTH_THRESHOLD = 10
-    STUCK_THRESHOLD = 30
+    STUCK_THRESHOLD = 60
     MAX_CONSECUTIVE_RECONNECTS = 3
     CONSECUTIVE_RECONNECT_TIME = 5 * 60  # 5 minutes
 
@@ -99,7 +99,7 @@ class EmergencyQuit(Action):
                         if stuck_time >= self.STUCK_THRESHOLD:
                             _l.critical("current_pos: %s, last_pos: %s, current_time: %s, last_pos_time: %s", current_pos, self._last_pos, current_time, self._last_pos_time)
                             _l.critical("Emergency quit: Bot is stuck at position %s for %d seconds. Attempting to reconnect...", current_pos, self.STUCK_THRESHOLD)
-                            self.bot.reconnect(wait_time=self._reconnect_wait_time)
+                            self.bot.reconnect(wait_time=10)
                             # attempt to force a movement
                             self.bot.goto(*self.bot.goto_goal)
                             self._last_pos = None

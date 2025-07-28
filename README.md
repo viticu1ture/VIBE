@@ -24,10 +24,10 @@ npm run test-villager
 npm start
 
 # Run villager trading strategy
-npm run dev -- --host mc.kipicraft.net --port 25566 --username YourUsername --strategy villager
+npm run dev -- --host 2b2t.org --port 25565 --username YourUsername --strategy villager
 
 # Run with custom server
-npm run dev -- --host mc.kipicraft.net --port 25566 --username YourUsername --mc-version 1.21.4
+npm run dev -- --host 2b2t.org --port 25565 --username YourUsername --mc-version 1.21.4
 ```
 
 ### Command Line Options
@@ -69,8 +69,8 @@ npm run dev -- --host mc.kipicraft.net --port 25566 --username YourUsername --mc
 import { Bot } from "./bot";
 
 const bot = new Bot({
-    host: "mc.kipicraft.net",
-    port: 25566,
+    host: "2b2t.org",
+    port: 25565,
     username: "YourUsername",
     mcVersion: "1.21.4"
 });
@@ -137,63 +137,6 @@ The VillagerExpTrade strategy:
 - Bot must have emeralds in inventory
 - Cleric villagers must be within 64 blocks
 - Clerics must have experience bottle trades available
-
-## 🔧 Key Differences from Python Version
-
-### Removed Complexity
-- ❌ No more Python-to-JavaScript bridge code
-- ❌ No more `require("javascript")` workarounds
-- ❌ No more manual event handler decorators
-
-### Improved Code
-- ✅ Native TypeScript with full type safety
-- ✅ Proper async/await patterns
-- ✅ Clean object-oriented design
-- ✅ Simplified event handling
-- ✅ Better error handling
-
-### Simple TypeScript Syntax
-- Uses basic classes and interfaces
-- Minimal use of advanced TypeScript features
-- Clear and readable code structure
-- Easy to understand for Python developers
-
-## 🛡️ Safety Features
-
-The bot includes several safety mechanisms:
-
-- **Health monitoring** - Disconnects if health drops too low
-- **Player detection** - Can detect and react to other players
-- **Stuck detection** - Reconnects if bot gets stuck
-- **Food monitoring** - Ensures bot doesn't starve
-- **Emergency quit** - Multiple fail-safes for dangerous situations
-
-## 🎮 Tested Servers
-
-- ✅ mc.kipicraft.net:25566 (1.21.4)
-- ✅ Compatible with vanilla Minecraft servers
-- ✅ Works with most modded servers
-
-## 📁 Project Structure
-
-```
-src/
-├── actions/          # Individual bot behaviors
-│   ├── action.ts     # Base action class
-│   ├── alwaysShield.ts
-│   ├── efficientEat.ts
-│   ├── emergencyQuit.ts
-│   ├── gotoLocation.ts
-│   └── lootFinder.ts
-├── strategies/       # High-level bot strategies
-│   ├── strategy.ts   # Base strategy class
-│   └── netherHighway.ts
-├── bot.ts           # Main bot class
-├── constants.ts     # Game constants
-├── utils.ts         # Utility functions
-├── index.ts         # Main entry point
-└── test.ts          # Connection test
-```
 
 ## 🚨 Important Notes
 
